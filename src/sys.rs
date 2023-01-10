@@ -4,10 +4,11 @@ use ash::vk::TaggedStructure;
 use ash::vk::{self, PFN_vkGetDeviceProcAddr};
 
 #[allow(non_camel_case_types)]
-pub type PFN_GetPhysicalDeviceProcAddr = unsafe extern "system" fn(
-    instance: vk::Instance,
-    p_name: *const c_char,
-) -> vk::PFN_vkVoidFunction;
+pub type PFN_vk_layerGetPhysicalDeviceProcAddr =
+    unsafe extern "system" fn(
+        instance: vk::Instance,
+        p_name: *const c_char,
+    ) -> vk::PFN_vkVoidFunction;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -33,7 +34,7 @@ pub struct NegotiateLayerInterface {
     pub loader_layer_interface_version: u32,
     pub pfn_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
     pub pfn_get_device_proc_addr: vk::PFN_vkGetDeviceProcAddr,
-    pub pfn_get_physical_device_proc_addr: PFN_GetPhysicalDeviceProcAddr,
+    pub pfn_get_physical_device_proc_addr: PFN_vk_layerGetPhysicalDeviceProcAddr,
 }
 
 #[allow(non_camel_case_types)]
@@ -69,7 +70,7 @@ impl LayerFunction {
 pub struct LayerInstanceLink {
     pub p_next: *mut LayerInstanceLink,
     pub pfn_next_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
-    pub pfn_next_get_physical_device_proc_addr: PFN_GetPhysicalDeviceProcAddr,
+    pub pfn_next_get_physical_device_proc_addr: PFN_vk_layerGetPhysicalDeviceProcAddr,
 }
 
 #[repr(C)]
