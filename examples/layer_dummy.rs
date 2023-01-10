@@ -236,7 +236,7 @@ unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
     let name = CStr::from_ptr(p_name);
     loop {
         let pfn: *const () = match name.to_bytes() {
-            b"vkGetInstanceProcAddr" => dispatch_next_vkGetDeviceProcAddr as _,
+            b"vkGetInstanceProcAddr" => dispatch_next_vkGetInstanceProcAddr as _,
             b"vkGetDeviceProcAddr" => dispatch_next_vkGetDeviceProcAddr as _,
             _ => break,
         };
@@ -245,6 +245,7 @@ unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
     let gipa = GIPA_MAP.get(&instance)?;
     gipa(instance, p_name)
 }
+const _: vk::PFN_vkGetInstanceProcAddr = dispatch_next_vkGetInstanceProcAddr;
 
 #[no_mangle]
 unsafe extern "system" fn dispatch_next_vkGetDeviceProcAddr(
@@ -262,3 +263,4 @@ unsafe extern "system" fn dispatch_next_vkGetDeviceProcAddr(
     let gdpa = GDPA_MAP.get(&device)?;
     gdpa(device, p_name)
 }
+const _: vk::PFN_vkGetDeviceProcAddr = dispatch_next_vkGetDeviceProcAddr;
