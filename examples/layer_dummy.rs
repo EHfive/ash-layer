@@ -5,7 +5,7 @@ use ash::extensions::khr;
 use ash::vk;
 use ash_layer::*;
 use dashmap::DashMap;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 
 macro_rules! function {
     () => {{
@@ -41,10 +41,10 @@ struct LayerDevice {
     khr_swapchain: khr::Swapchain,
 }
 
+static GIPA: OnceCell<vk::PFN_vkGetInstanceProcAddr> = OnceCell::new();
+static ENTRY: OnceCell<ash::Entry> = OnceCell::new();
+
 // DashMap ensures thread-safely and can be consider as faster mutex guarded HashMap
-static GIPA_MAP: Lazy<DashMap<vk::Instance, vk::PFN_vkGetInstanceProcAddr>> =
-    Lazy::new(|| DashMap::new());
-static ENTRY_MAP: Lazy<DashMap<vk::Instance, ash::Entry>> = Lazy::new(|| DashMap::new());
 static INSTANCE_MAP: Lazy<DashMap<vk::Instance, LayerInstance>> = Lazy::new(|| DashMap::new());
 static PHY_TO_INSTANCE_MAP: Lazy<DashMap<vk::PhysicalDevice, vk::Instance>> =
     Lazy::new(|| DashMap::new());
@@ -86,7 +86,7 @@ pub unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
         log!("intercept {}: {:?}", name.to_string_lossy(), pfn);
         return ::core::mem::transmute(pfn);
     }
-    let gipa = GIPA_MAP.get(&instance)?;
+    let gipa = GIPA.get()?;
     gipa(instance, p_name)
 }
 const _: vk::PFN_vkGetInstanceProcAddr = dummy_vkGetInstanceProcAddr;
@@ -143,13 +143,15 @@ pub unsafe extern "system" fn dummy_vkCreateInstance(
 
     // IMPORTANT: this should be put before any code executing dispatch_next_vkGetInstanceProcAddr
     //            i.e. ash::Instance::load and khr::Surface::new
-    GIPA_MAP.insert(instance, gipa);
+    let _ = GIPA.set(gipa);
 
     let entry = ash::Entry::from_static_fn(vk::StaticFn {
         // IMPORTANT: this make sure the layer provided device specific vkGetDeviceProcAddr is used instead of
         //            the instance specific one get from vkGetInstanceProcAddr, as the later would somehow crashes on execution.
         get_instance_proc_addr: dispatch_next_vkGetInstanceProcAddr,
     });
+    let _ = ENTRY.set(entry.clone());
+
     let ash_instance = ash::Instance::load(entry.static_fn(), instance);
     let khr_surface = khr::Surface::new(&entry, &ash_instance);
 
@@ -159,7 +161,6 @@ pub unsafe extern "system" fn dummy_vkCreateInstance(
     for phy_device in phy_devices {
         PHY_TO_INSTANCE_MAP.insert(phy_device, instance);
     }
-    ENTRY_MAP.insert(instance, entry);
     INSTANCE_MAP.insert(
         instance,
         LayerInstance {
@@ -242,7 +243,7 @@ unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
         };
         return ::core::mem::transmute(pfn);
     }
-    let gipa = GIPA_MAP.get(&instance)?;
+    let gipa = GIPA.get()?;
     gipa(instance, p_name)
 }
 const _: vk::PFN_vkGetInstanceProcAddr = dispatch_next_vkGetInstanceProcAddr;
