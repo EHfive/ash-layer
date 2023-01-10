@@ -42,6 +42,7 @@ struct LayerDevice {
 }
 
 static GIPA: OnceCell<vk::PFN_vkGetInstanceProcAddr> = OnceCell::new();
+static GPHYPA: OnceCell<PFN_vk_layerGetPhysicalDeviceProcAddr> = OnceCell::new();
 static ENTRY: OnceCell<ash::Entry> = OnceCell::new();
 
 // DashMap ensures thread-safely and can be consider as faster mutex guarded HashMap
@@ -63,8 +64,14 @@ pub unsafe extern "system" fn vkNegotiateLoaderLayerInterfaceVersion(
         version_struct.loader_layer_interface_version,
     );
     version_struct.loader_layer_interface_version = 2;
+
+    // Only vkGetInstanceProcAddr and vkCreateInstance are mandatory to intercept
     version_struct.pfn_get_instance_proc_addr = dummy_vkGetInstanceProcAddr;
+
+    // pfn_get_device_proc_addr and pfn_get_physical_device_proc_addr are optional
+    // and can be cleared with related functions & match branches if not needed
     version_struct.pfn_get_device_proc_addr = dummy_vkGetDeviceProcAddr;
+    version_struct.pfn_get_physical_device_proc_addr = dummy_vk_layerGetPhysicalDeviceProcAddr;
     vk::Result::SUCCESS
 }
 const _: PFN_vkNegotiateLoaderLayerInterfaceVersion = vkNegotiateLoaderLayerInterfaceVersion;
@@ -81,6 +88,7 @@ pub unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
             b"vkGetInstanceProcAddr" => dummy_vkGetInstanceProcAddr as _,
             b"vkGetDeviceProcAddr" => dummy_vkGetDeviceProcAddr as _,
             b"vkCreateDevice" => dummy_vkCreateDevice as _,
+            b"vk_layerGetPhysicalDeviceProcAddr" => dummy_vk_layerGetPhysicalDeviceProcAddr as _,
             _ => break,
         };
         log!("intercept {}: {:?}", name.to_string_lossy(), pfn);
@@ -129,6 +137,8 @@ pub unsafe extern "system" fn dummy_vkCreateInstance(
     (*chain_info).u.p_layer_info = layer_info.p_next;
 
     let gipa = layer_info.pfn_next_get_instance_proc_addr;
+    let _ = GPHYPA.set(layer_info.pfn_next_get_physical_device_proc_addr);
+
     let name = CStr::from_bytes_with_nul_unchecked(b"vkCreateInstance\0");
     let create_instance: vk::PFN_vkCreateInstance =
         mem::transmute(gipa(vk::Instance::null(), name.as_ptr()));
@@ -228,6 +238,15 @@ pub unsafe extern "system" fn dummy_vkCreateDevice(
     vk::Result::SUCCESS
 }
 const _: vk::PFN_vkCreateDevice = dummy_vkCreateDevice;
+
+#[no_mangle]
+unsafe extern "system" fn dummy_vk_layerGetPhysicalDeviceProcAddr(
+    instance: vk::Instance,
+    p_name: *const c_char,
+) -> vk::PFN_vkVoidFunction {
+    let gphypa = GPHYPA.get()?;
+    gphypa(instance, p_name)
+}
 
 #[no_mangle]
 unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
