@@ -77,7 +77,7 @@ pub unsafe extern "system" fn vkNegotiateLoaderLayerInterfaceVersion(
 const _: PFN_vkNegotiateLoaderLayerInterfaceVersion = vkNegotiateLoaderLayerInterfaceVersion;
 
 #[no_mangle]
-pub unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
+unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
     instance: vk::Instance,
     p_name: *const c_char,
 ) -> vk::PFN_vkVoidFunction {
@@ -100,7 +100,7 @@ pub unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
 const _: vk::PFN_vkGetInstanceProcAddr = dummy_vkGetInstanceProcAddr;
 
 #[no_mangle]
-pub unsafe extern "system" fn dummy_vkGetDeviceProcAddr(
+unsafe extern "system" fn dummy_vkGetDeviceProcAddr(
     device: vk::Device,
     p_name: *const c_char,
 ) -> vk::PFN_vkVoidFunction {
@@ -121,7 +121,7 @@ pub unsafe extern "system" fn dummy_vkGetDeviceProcAddr(
 const _: vk::PFN_vkGetDeviceProcAddr = dummy_vkGetDeviceProcAddr;
 
 #[no_mangle]
-pub unsafe extern "system" fn dummy_vkCreateInstance(
+unsafe extern "system" fn dummy_vkCreateInstance(
     p_create_info: *const vk::InstanceCreateInfo,
     p_allocator: *const vk::AllocationCallbacks,
     p_instance: *mut vk::Instance,
@@ -184,7 +184,7 @@ pub unsafe extern "system" fn dummy_vkCreateInstance(
 const _: vk::PFN_vkCreateInstance = dummy_vkCreateInstance;
 
 #[no_mangle]
-pub unsafe extern "system" fn dummy_vkCreateDevice(
+unsafe extern "system" fn dummy_vkCreateDevice(
     physical_device: vk::PhysicalDevice,
     p_create_info: *const vk::DeviceCreateInfo,
     p_allocator: *const vk::AllocationCallbacks,
@@ -244,9 +244,18 @@ unsafe extern "system" fn dummy_vk_layerGetPhysicalDeviceProcAddr(
     instance: vk::Instance,
     p_name: *const c_char,
 ) -> vk::PFN_vkVoidFunction {
+    let name = CStr::from_ptr(p_name);
+    loop {
+        let pfn: *const () = match name.to_bytes() {
+            b"vkCreateDevice" => dummy_vkCreateDevice as _,
+            _ => break,
+        };
+        return ::core::mem::transmute(pfn);
+    }
     let gphypa = GPHYPA.get()?;
     gphypa(instance, p_name)
 }
+const _: PFN_vk_layerGetPhysicalDeviceProcAddr = dummy_vk_layerGetPhysicalDeviceProcAddr;
 
 #[no_mangle]
 unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
