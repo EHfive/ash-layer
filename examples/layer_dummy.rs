@@ -84,10 +84,12 @@ unsafe extern "system" fn dummy_vkGetInstanceProcAddr(
     let name = CStr::from_ptr(p_name);
     loop {
         let pfn: *const () = match name.to_bytes() {
-            b"vkCreateInstance" => dummy_vkCreateInstance as _,
             b"vkGetInstanceProcAddr" => dummy_vkGetInstanceProcAddr as _,
+            b"vkCreateInstance" => dummy_vkCreateInstance as _,
+            b"vkDestroyInstance" => dummy_vkDestroyInstance as _,
             b"vkGetDeviceProcAddr" => dummy_vkGetDeviceProcAddr as _,
             b"vkCreateDevice" => dummy_vkCreateDevice as _,
+            b"vkDestroyDevice" => dummy_vkDestroyDevice as _,
             b"vk_layerGetPhysicalDeviceProcAddr" => dummy_vk_layerGetPhysicalDeviceProcAddr as _,
             _ => break,
         };
@@ -109,6 +111,7 @@ unsafe extern "system" fn dummy_vkGetDeviceProcAddr(
         let pfn: *const () = match name.to_bytes() {
             b"vkGetDeviceProcAddr" => dummy_vkGetDeviceProcAddr as _,
             b"vkCreateDevice" => dummy_vkCreateDevice as _,
+            b"vkDestroyDevice" => dummy_vkDestroyDevice as _,
             _ => break,
         };
         log!("intercept {}: {:?}", name.to_string_lossy(), pfn);
@@ -184,6 +187,26 @@ unsafe extern "system" fn dummy_vkCreateInstance(
 const _: vk::PFN_vkCreateInstance = dummy_vkCreateInstance;
 
 #[no_mangle]
+unsafe extern "system" fn dummy_vkDestroyInstance(
+    instance: vk::Instance,
+    p_allocator: *const vk::AllocationCallbacks,
+) -> () {
+    let layer_instance = INSTANCE_MAP.remove(&instance);
+    if layer_instance.is_none() {
+        return;
+    }
+    let LayerInstance { ash_instance, .. } = layer_instance.unwrap_unchecked().1;
+
+    let phy_devices = ash_instance.enumerate_physical_devices().unwrap();
+    for phy_device in phy_devices {
+        PHY_TO_INSTANCE_MAP.remove(&phy_device);
+    }
+    log!("destroying {:?}", instance);
+    (ash_instance.fp_v1_0().destroy_instance)(instance, p_allocator);
+}
+const _: vk::PFN_vkDestroyInstance = dummy_vkDestroyInstance;
+
+#[no_mangle]
 unsafe extern "system" fn dummy_vkCreateDevice(
     physical_device: vk::PhysicalDevice,
     p_create_info: *const vk::DeviceCreateInfo,
@@ -238,6 +261,24 @@ unsafe extern "system" fn dummy_vkCreateDevice(
     vk::Result::SUCCESS
 }
 const _: vk::PFN_vkCreateDevice = dummy_vkCreateDevice;
+
+#[no_mangle]
+unsafe extern "system" fn dummy_vkDestroyDevice(
+    device: vk::Device,
+    p_allocator: *const vk::AllocationCallbacks,
+) -> () {
+    GDPA_MAP.remove(&device);
+
+    let layer_device = DEVICE_MAP.remove(&device);
+    if layer_device.is_none() {
+        return;
+    }
+    let LayerDevice { ash_device, .. } = layer_device.unwrap_unchecked().1;
+
+    log!("destroying {:?}", device);
+    (ash_device.fp_v1_0().destroy_device)(device, p_allocator);
+}
+const _: vk::PFN_vkDestroyDevice = dummy_vkDestroyDevice;
 
 #[no_mangle]
 unsafe extern "system" fn dummy_vk_layerGetPhysicalDeviceProcAddr(
