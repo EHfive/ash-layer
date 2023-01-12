@@ -308,6 +308,13 @@ unsafe extern "system" fn dispatch_next_vkGetInstanceProcAddr(
         let pfn: *const () = match name.to_bytes() {
             b"vkGetInstanceProcAddr" => dispatch_next_vkGetInstanceProcAddr as _,
             b"vkGetDeviceProcAddr" => dispatch_next_vkGetDeviceProcAddr as _,
+            // These would cause some layer (i.e. VK_LAYER_KHRONOS_validation) crashes if called down via vkGetInstanceProcAddr.
+            // But as ash::Entry loads all the global functions, we need to force return null to workaround it.
+            // If you really need calling down these functions, follow
+            // https://vulkan.lunarg.com/doc/view/1.3.236.0/linux/LoaderLayerInterface.html#user-content-pre-instance-functions
+            b"vkEnumerateInstanceExtensionProperties" => core::ptr::null(),
+            b"vkEnumerateInstanceLayerProperties" => core::ptr::null(),
+            b"vkEnumerateInstanceVersion" => core::ptr::null(),
             _ => break,
         };
         return ::core::mem::transmute(pfn);
