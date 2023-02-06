@@ -131,13 +131,14 @@ unsafe extern "system" fn dummy_vkCreateInstance(
 ) -> vk::Result {
     let create_info = p_create_info.read();
     let chain_info = get_instance_chain_info(&create_info, LayerFunction::LAYER_LINK_INFO);
-    if chain_info.is_none() {
+    let chain_info = if let Some(mut v) = chain_info {
+        v.as_mut()
+    } else {
         return vk::Result::ERROR_INITIALIZATION_FAILED;
-    }
-    let chain_info = chain_info.unwrap_unchecked().cast_mut();
+    };
 
-    let layer_info = chain_info.read().u.p_layer_info.read();
-    (*chain_info).u.p_layer_info = layer_info.p_next;
+    let layer_info = chain_info.u.p_layer_info.read();
+    chain_info.u.p_layer_info = layer_info.p_next;
 
     let gipa = layer_info.pfn_next_get_instance_proc_addr;
     let _ = GPHYPA.set(layer_info.pfn_next_get_physical_device_proc_addr);
@@ -192,10 +193,12 @@ unsafe extern "system" fn dummy_vkDestroyInstance(
     p_allocator: *const vk::AllocationCallbacks,
 ) -> () {
     let layer_instance = INSTANCE_MAP.remove(&instance);
-    if layer_instance.is_none() {
+
+    let ash_instance = if let Some(v) = layer_instance {
+        v.1.ash_instance
+    } else {
         return;
-    }
-    let LayerInstance { ash_instance, .. } = layer_instance.unwrap_unchecked().1;
+    };
 
     let phy_devices = ash_instance.enumerate_physical_devices().unwrap();
     for phy_device in phy_devices {
@@ -221,13 +224,14 @@ unsafe extern "system" fn dummy_vkCreateDevice(
 
     let create_info = p_create_info.read();
     let chain_info = get_device_chain_info(&create_info, LayerFunction::LAYER_LINK_INFO);
-    if chain_info.is_none() {
+    let chain_info = if let Some(mut v) = chain_info {
+        v.as_mut()
+    } else {
         return vk::Result::ERROR_INITIALIZATION_FAILED;
-    }
-    let chain_info = chain_info.unwrap_unchecked().cast_mut();
+    };
 
-    let layer_info = chain_info.read().u.p_layer_info.read();
-    (*chain_info).u.p_layer_info = layer_info.p_next;
+    let layer_info = chain_info.u.p_layer_info.read();
+    chain_info.u.p_layer_info = layer_info.p_next;
 
     let gdpa = layer_info.pfn_next_get_device_proc_addr;
 
@@ -270,10 +274,12 @@ unsafe extern "system" fn dummy_vkDestroyDevice(
     GDPA_MAP.remove(&device);
 
     let layer_device = DEVICE_MAP.remove(&device);
-    if layer_device.is_none() {
+
+    let ash_device = if let Some(v) = layer_device {
+        v.1.ash_device
+    } else {
         return;
-    }
-    let LayerDevice { ash_device, .. } = layer_device.unwrap_unchecked().1;
+    };
 
     log!("destroying {:?}", device);
     (ash_device.fp_v1_0().destroy_device)(device, p_allocator);
