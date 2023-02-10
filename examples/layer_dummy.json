@@ -1,5 +1,5 @@
 {
-  "$schema": "https://github.com/LunarG/VulkanTools/raw/master/vkconfig_core/layers/layers_schema.json",
+  "$schema": "https://github.com/LunarG/VulkanTools/raw/main/vkconfig_core/layers/layers_schema.json",
   "file_format_version": "1.2.0",
   "layer": {
     "name": "VK_LAYER_ASH_LAYER_dummy",

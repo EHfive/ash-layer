@@ -8,6 +8,8 @@ authors = ["Huang-Huang Bao <i@eh5.me>"]
 homepage = "https://github.com/EHfive/ash-layer"
 repository = "https://github.com/EHfive/ash-layer"
 license = "MIT OR Apache-2.0"
+keywords = ["graphics", "vulkan"]
+categories = ["external-ffi-bindings", "graphics"]
 
 [dev-dependencies]
 dashmap = "5.4.0"
