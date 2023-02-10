@@ -66,12 +66,13 @@ pub unsafe extern "system" fn vkNegotiateLoaderLayerInterfaceVersion(
     version_struct.loader_layer_interface_version = 2;
 
     // Only vkGetInstanceProcAddr and vkCreateInstance are mandatory to intercept
-    version_struct.pfn_get_instance_proc_addr = dummy_vkGetInstanceProcAddr;
+    version_struct.pfn_get_instance_proc_addr = Some(dummy_vkGetInstanceProcAddr);
 
     // pfn_get_device_proc_addr and pfn_get_physical_device_proc_addr are optional
     // and can be cleared with related functions & match branches if not needed
-    version_struct.pfn_get_device_proc_addr = dummy_vkGetDeviceProcAddr;
-    version_struct.pfn_get_physical_device_proc_addr = dummy_vk_layerGetPhysicalDeviceProcAddr;
+    version_struct.pfn_get_device_proc_addr = Some(dummy_vkGetDeviceProcAddr);
+    version_struct.pfn_get_physical_device_proc_addr =
+        Some(dummy_vk_layerGetPhysicalDeviceProcAddr);
     vk::Result::SUCCESS
 }
 const _: PFN_vkNegotiateLoaderLayerInterfaceVersion = vkNegotiateLoaderLayerInterfaceVersion;
@@ -140,8 +141,14 @@ unsafe extern "system" fn dummy_vkCreateInstance(
     let layer_info = chain_info.u.p_layer_info.read();
     chain_info.u.p_layer_info = layer_info.p_next;
 
-    let gipa = layer_info.pfn_next_get_instance_proc_addr;
-    let _ = GPHYPA.set(layer_info.pfn_next_get_physical_device_proc_addr);
+    let gipa = layer_info
+        .pfn_next_get_instance_proc_addr
+        .expect("broken layer info");
+    let _ = GPHYPA.set(
+        layer_info
+            .pfn_next_get_physical_device_proc_addr
+            .expect("broken layer info"),
+    );
 
     let name = CStr::from_bytes_with_nul_unchecked(b"vkCreateInstance\0");
     let create_instance: vk::PFN_vkCreateInstance =
@@ -233,7 +240,9 @@ unsafe extern "system" fn dummy_vkCreateDevice(
     let layer_info = chain_info.u.p_layer_info.read();
     chain_info.u.p_layer_info = layer_info.p_next;
 
-    let gdpa = layer_info.pfn_next_get_device_proc_addr;
+    let gdpa = layer_info
+        .pfn_next_get_device_proc_addr
+        .expect("broken layer info");
 
     let res = (instance_fn.create_device)(physical_device, p_create_info, p_allocator, p_device);
     if res != vk::Result::SUCCESS {

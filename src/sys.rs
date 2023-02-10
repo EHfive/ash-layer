@@ -32,9 +32,9 @@ pub struct NegotiateLayerInterface {
     pub s_type: NegotiateLayerStructType,
     pub p_next: *mut c_void,
     pub loader_layer_interface_version: u32,
-    pub pfn_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
-    pub pfn_get_device_proc_addr: vk::PFN_vkGetDeviceProcAddr,
-    pub pfn_get_physical_device_proc_addr: PFN_vk_layerGetPhysicalDeviceProcAddr,
+    pub pfn_get_instance_proc_addr: Option<vk::PFN_vkGetInstanceProcAddr>,
+    pub pfn_get_device_proc_addr: Option<vk::PFN_vkGetDeviceProcAddr>,
+    pub pfn_get_physical_device_proc_addr: Option<PFN_vk_layerGetPhysicalDeviceProcAddr>,
 }
 
 #[allow(non_camel_case_types)]
@@ -69,15 +69,15 @@ impl LayerFunction {
 #[derive(Copy, Clone)]
 pub struct LayerInstanceLink {
     pub p_next: *mut LayerInstanceLink,
-    pub pfn_next_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
-    pub pfn_next_get_physical_device_proc_addr: PFN_vk_layerGetPhysicalDeviceProcAddr,
+    pub pfn_next_get_instance_proc_addr: Option<vk::PFN_vkGetInstanceProcAddr>,
+    pub pfn_next_get_physical_device_proc_addr: Option<PFN_vk_layerGetPhysicalDeviceProcAddr>,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct LayerDeviceInfo {
     pub p_device_info: *mut c_void,
-    pub pfn_next_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
+    pub pfn_next_get_instance_proc_addr: Option<vk::PFN_vkGetInstanceProcAddr>,
 }
 
 #[allow(non_camel_case_types)]
@@ -95,7 +95,7 @@ pub type PFN_vkLayerCreateDevice = unsafe extern "system" fn(
     p_create_info: *const vk::DeviceCreateInfo,
     p_allocator: *const vk::AllocationCallbacks,
     p_device: *mut vk::Device,
-    pfn_layer_GIPA: vk::PFN_vkGetInstanceProcAddr,
+    pfn_layer_GIPA: Option<vk::PFN_vkGetInstanceProcAddr>,
     p_pfn_next_GDPA: *mut vk::PFN_vkGetDeviceProcAddr,
 ) -> vk::Result;
 
@@ -118,15 +118,15 @@ impl LoaderFeatureFlagBits {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct LayerInstanceCreateInfoLayerDevice {
-    pub pfn_layer_create_device: PFN_vkLayerCreateDevice,
-    pub pfn_layer_destroy_device: PFN_vkLayerDestroyDevice,
+    pub pfn_layer_create_device: Option<PFN_vkLayerCreateDevice>,
+    pub pfn_layer_destroy_device: Option<PFN_vkLayerDestroyDevice>,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union LayerInstanceCreateInfoUnion {
     pub p_layer_info: *mut LayerInstanceLink,
-    pub pfn_set_instance_loader_data: PFN_vkSetInstanceLoaderData,
+    pub pfn_set_instance_loader_data: Option<PFN_vkSetInstanceLoaderData>,
     pub layer_device: LayerInstanceCreateInfoLayerDevice,
     pub loader_features: LoaderFeatureFlagBits,
 }
@@ -159,15 +159,15 @@ impl ::core::default::Default for LayerInstanceCreateInfo {
 #[derive(Copy, Clone)]
 pub struct LayerDeviceLink {
     pub p_next: *mut LayerDeviceLink,
-    pub pfn_next_get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
-    pub pfn_next_get_device_proc_addr: PFN_vkGetDeviceProcAddr,
+    pub pfn_next_get_instance_proc_addr: Option<vk::PFN_vkGetInstanceProcAddr>,
+    pub pfn_next_get_device_proc_addr: Option<PFN_vkGetDeviceProcAddr>,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union LayerDeviceCreateInfoUnion {
     pub p_layer_info: *mut LayerDeviceLink,
-    pub pfn_set_device_loader_data: PFN_vkSetDeviceLoaderData,
+    pub pfn_set_device_loader_data: Option<PFN_vkSetDeviceLoaderData>,
 }
 
 #[repr(C)]
@@ -235,7 +235,7 @@ pub type PFN_layer_vkEnumerateInstanceExtensionProperties = unsafe extern "syste
 #[derive(Clone, Copy)]
 pub struct EnumerateInstanceExtensionPropertiesChain {
     pub header: ChainHeader,
-    pub pfn_next_layer: PFN_layer_vkEnumerateInstanceExtensionProperties,
+    pub pfn_next_layer: Option<PFN_layer_vkEnumerateInstanceExtensionProperties>,
     pub p_next_link: *const EnumerateInstanceExtensionPropertiesChain,
 }
 impl EnumerateInstanceExtensionPropertiesChain {
@@ -246,7 +246,7 @@ impl EnumerateInstanceExtensionPropertiesChain {
         p_property_count: *mut u32,
         p_properties: *mut vk::ExtensionProperties,
     ) -> vk::Result {
-        (self.pfn_next_layer)(
+        (self.pfn_next_layer.expect("pfn_next_layer not set"))(
             self.p_next_link,
             p_layer_name,
             p_property_count,
@@ -266,7 +266,7 @@ pub type PFN_layer_vkEnumerateInstanceLayerProperties = unsafe extern "system" f
 #[derive(Clone, Copy)]
 pub struct EnumerateInstanceLayerPropertiesChain {
     pub header: ChainHeader,
-    pub pfn_next_layer: PFN_layer_vkEnumerateInstanceLayerProperties,
+    pub pfn_next_layer: Option<PFN_layer_vkEnumerateInstanceLayerProperties>,
     pub p_next_link: *const EnumerateInstanceLayerPropertiesChain,
 }
 impl EnumerateInstanceLayerPropertiesChain {
@@ -276,7 +276,11 @@ impl EnumerateInstanceLayerPropertiesChain {
         p_property_count: *mut u32,
         p_properties: *mut vk::LayerProperties,
     ) -> vk::Result {
-        (self.pfn_next_layer)(self.p_next_link, p_property_count, p_properties)
+        (self.pfn_next_layer.expect("pfn_next_layer not ser"))(
+            self.p_next_link,
+            p_property_count,
+            p_properties,
+        )
     }
 }
 
@@ -290,12 +294,12 @@ pub type PFN_layer_vkEnumerateInstanceVersion = unsafe extern "system" fn(
 #[derive(Clone, Copy)]
 pub struct EnumerateInstanceVersionChain {
     pub header: ChainHeader,
-    pub pfn_next_layer: PFN_layer_vkEnumerateInstanceVersion,
+    pub pfn_next_layer: Option<PFN_layer_vkEnumerateInstanceVersion>,
     pub p_next_link: *const EnumerateInstanceVersionChain,
 }
 impl EnumerateInstanceVersionChain {
     #[inline]
     pub unsafe fn call_down(&self, p_api_version: *mut u32) -> vk::Result {
-        (self.pfn_next_layer)(self.p_next_link, p_api_version)
+        (self.pfn_next_layer.expect("pfn_next_layer not set"))(self.p_next_link, p_api_version)
     }
 }
